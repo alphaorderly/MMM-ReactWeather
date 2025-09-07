@@ -87,12 +87,15 @@ const WeatherComponent: React.FC<WeatherComponentProps> = ({
           <div className="flex flex-col gap-2 w-full">
             <div className="flex flex-wrap items-end gap-4">
               <span className="today-temp font-light tracking-tight tabular-nums">{todayTemp}°</span>
-              <span className="meta-sm text-white/60">{Math.round(today.temperatureMin)}° / {Math.round(today.temperatureMax)}°</span>
-              {feelsLike !== undefined && <span className="mini text-white/50">Feels {feelsLike}°</span>}
-              {today.uvIndex != null && <span className="mini text-white/50">UV {Math.round(today.uvIndex)}{today.uvIndexMax!=null?`/${Math.round(today.uvIndexMax)}`:''}</span>}
             </div>
+
             {/* Grouped detail rows (excluding UV) -> 3 / 4 / 3 layout */}
             <div className="flex flex-col gap-1 mini text-white/70 leading-tight">
+              <div className="flex flex-wrap gap-4">
+                <span className="meta-sm text-white/60">{Math.round(today.temperatureMin)}° / {Math.round(today.temperatureMax)}°</span>
+                {feelsLike !== undefined && <span className="mini text-white/50">Feels {feelsLike}°</span>}
+                {today.uvIndex != null && <span className="mini text-white/50">UV {Math.round(today.uvIndex)}{today.uvIndexMax!=null?`/${Math.round(today.uvIndexMax)}`:''}</span>}
+              </div>
               <div className="flex flex-wrap gap-4">
                 <span>{descFor(today.weatherCode)}</span>
                 {today.precipitation > 0 && <span className="flex items-center gap-1 text-blue-300"><Droplets size={14} />{today.precipitation.toFixed(1)}mm</span>}
