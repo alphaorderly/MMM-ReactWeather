@@ -35,6 +35,7 @@ Modern MagicMirror² weather module powered by React 18 + TypeScript + Vite. The
     lat: 37.5665,
     lon: 126.9780,
     size: 'md'           // sm | md | lg | xl (UI scale)
+    interval: 10 * 60 * 1000 // ms between weather data refreshes
   }
 }
 ```

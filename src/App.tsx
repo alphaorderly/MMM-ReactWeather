@@ -13,6 +13,7 @@ export default function App(): JSX.Element {
         latitude={config?.lat}
         longitude={config?.lon}
         size={config?.size as 'sm' | 'md' | 'lg' | 'xl' | undefined}
+        interval={config?.interval as number | undefined}
       />
     </div>
   );

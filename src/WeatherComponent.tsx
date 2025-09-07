@@ -29,28 +29,32 @@ const descFor = (code: number) => {
   return map[code] || 'Unknown';
 };
 
-interface WeatherComponentProps { 
-  latitude?: number; 
-  longitude?: number; 
+// Convert wind speed (m/s from Open-Meteo) to km/h
+const msToKmh = (v: number) => v * 3.6;
+
+interface WeatherComponentProps {
+  latitude?: number;
+  longitude?: number;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  interval?: number; // weather refresh override (ms)
 }
 
 const WeatherComponent: React.FC<WeatherComponentProps> = ({
   latitude = 37.5665,
   longitude = 126.9780,
-  size = 'md'
+  size = 'md',
+  interval
 }) => {
-  const { today, tomorrow, isLoading, error } = useWeather({ latitude, longitude, updateInterval: 10 * 60 * 1000 });
+  const { today, tomorrow, isLoading, error } = useWeather({ latitude, longitude, interval });
 
   const scaleMap: Record<string, string> = {
-    sm: 'text-[10px] [&_.today-temp]:text-3xl [&_.today-meta]:text-[11px] [&_.tomorrow-line]:text-[10px] gap-2',
-    md: 'text-[12px] [&_.today-temp]:text-5xl [&_.today-meta]:text-sm [&_.tomorrow-line]:text-xs gap-3',
-    lg: 'text-[14px] [&_.today-temp]:text-6xl [&_.today-meta]:text-base [&_.tomorrow-line]:text-sm gap-4',
-    xl: 'text-[16px] [&_.today-temp]:text-7xl [&_.today-meta]:text-lg [&_.tomorrow-line]:text-base gap-5'
+    sm: 'text-[12px] [&_.today-temp]:text-4xl [&_.mini]:text-[11px] [&_.meta-sm]:text-[11px]',
+    md: 'text-[13px] [&_.today-temp]:text-5xl [&_.mini]:text-[12px] [&_.meta-sm]:text-[12px]',
+    lg: 'text-[15px] [&_.today-temp]:text-6xl [&_.mini]:text-[13px] [&_.meta-sm]:text-[13px]',
+    xl: 'text-[17px] [&_.today-temp]:text-7xl [&_.mini]:text-[14px] [&_.meta-sm]:text-[14px]'
   };
   const scaleClasses = scaleMap[size] || scaleMap.md;
 
-  // Loading state (compact)
   if (isLoading && !today && !tomorrow) {
     return (
       <div className="flex items-center gap-3 text-white/70 text-sm">
@@ -66,45 +70,67 @@ const WeatherComponent: React.FC<WeatherComponentProps> = ({
 
   if (!today) return null;
 
-  // TODAY (emphasized)
   const todayTemp = today.temperature > -100 ? Math.round(today.temperature) : Math.round(today.temperatureMax);
-  const tomorrowLine = tomorrow ? `${Math.round(tomorrow.temperatureMin)}° / ${Math.round(tomorrow.temperatureMax)}° • ${descFor(tomorrow.weatherCode)}${tomorrow.precipitation > 0 ? ` • ${tomorrow.precipitation.toFixed(1)}mm` : ''}` : null;
+  const feelsLike = today.apparentTemperature != null ? Math.round(today.apparentTemperature) : undefined;
+  const tomorrowTempLine = tomorrow ? `${Math.round(tomorrow.temperatureMin)}° / ${Math.round(tomorrow.temperatureMax)}°` : null;
+
+  const formatTime = (iso?: string) => {
+    if (!iso) return undefined;
+    try { const d = new Date(iso); return d.toISOString().substring(11, 16); } catch { return undefined; }
+  };
 
   return (
-    <div className={`flex flex-col text-white select-none ${scaleClasses}`}>
-      {/* Today */}
-      <div className="flex items-center gap-4">
-        <div className="shrink-0">{iconFor(today.weatherCode)}</div>
-        <div className="flex flex-col leading-tight">
-          <div className="flex items-end gap-2">
-            <span className="today-temp font-light tracking-tight tabular-nums">{todayTemp}°</span>
-            <span className="today-meta text-white/60">{Math.round(today.temperatureMin)}° / {Math.round(today.temperatureMax)}°</span>
-          </div>
-          <div className="today-meta text-white/70 mt-1 flex flex-wrap items-center gap-3">
-            <span>{descFor(today.weatherCode)}</span>
-            {today.precipitation > 0 && (
-              <span className="flex items-center gap-1 text-blue-300"><Droplets size={14} />{today.precipitation.toFixed(1)}mm</span>
-            )}
-            {today.humidity > 0 && (
-              <span className="flex items-center gap-1 text-white/60"><Eye size={14} />{Math.round(today.humidity)}%</span>
-            )}
-            {today.windSpeed > 0 && (
-              <span className="flex items-center gap-1 text-white/60"><Wind size={14} />{today.windSpeed.toFixed(0)}km/h</span>
-            )}
+    <div className={`flex flex-col text-white select-none ${scaleClasses} leading-snug`}>
+      <div className="flex flex-col gap-3">
+        <div className="flex items-start gap-4">
+          <div>{iconFor(today.weatherCode)}</div>
+          <div className="flex flex-col gap-2 w-full">
+            <div className="flex flex-wrap items-end gap-4">
+              <span className="today-temp font-light tracking-tight tabular-nums">{todayTemp}°</span>
+              <span className="meta-sm text-white/60">{Math.round(today.temperatureMin)}° / {Math.round(today.temperatureMax)}°</span>
+              {feelsLike !== undefined && <span className="mini text-white/50">Feels {feelsLike}°</span>}
+              {today.uvIndex != null && <span className="mini text-white/50">UV {Math.round(today.uvIndex)}{today.uvIndexMax!=null?`/${Math.round(today.uvIndexMax)}`:''}</span>}
+            </div>
+            {/* Grouped detail rows (excluding UV) -> 3 / 4 / 3 layout */}
+            <div className="flex flex-col gap-1 mini text-white/70 leading-tight">
+              <div className="flex flex-wrap gap-4">
+                <span>{descFor(today.weatherCode)}</span>
+                {today.precipitation > 0 && <span className="flex items-center gap-1 text-blue-300"><Droplets size={14} />{today.precipitation.toFixed(1)}mm</span>}
+                {today.humidity > 0 && <span className="flex items-center gap-1 text-white/60"><Eye size={14} />{Math.round(today.humidity)}%</span>}
+              </div>
+              <div className="flex flex-wrap gap-4">
+                {today.windSpeed > 0 && <span className="flex items-center gap-1 text-white/60"><Wind size={14} />{msToKmh(today.windSpeed).toFixed(0)} km/h</span>}
+                {today.windSpeedMax != null && <span className="flex items-center gap-1 text-white/40"><Wind size={12} />max {msToKmh(today.windSpeedMax).toFixed(0)} km/h</span>}
+              </div>
+              <div className="flex flex-wrap gap-4">
+                {today.pressure && <span>Pressure {Math.round(today.pressure)}hPa</span>}
+                {today.visibility && <span>Vis {(today.visibility/1000).toFixed(0)}km</span>}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Divider */}
-      {tomorrow && <div className="h-px bg-white/10" />}
+      {tomorrow && <div className="h-px my-3 bg-white/10" />}
 
-      {/* Tomorrow (secondary) */}
       {tomorrow && (
-        <div className="flex items-start gap-2 tomorrow-line text-white/60">
-          <div className="pt-0.5">{iconFor(tomorrow.weatherCode, 28)}</div>
-          <div className="flex flex-col gap-0.5">
-            <span className="uppercase tracking-wide text-[10px] text-white/40">Tomorrow</span>
-            <span className="font-medium text-white/70">{tomorrowLine}</span>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start gap-4">
+            <div>{iconFor(tomorrow.weatherCode, 46)}</div>
+            <div className="flex flex-col gap-2 w-full">
+              <div className="flex flex-wrap items-baseline gap-4">
+                <span className="uppercase tracking-wide text-white/55 mini">Tomorrow</span>
+                <span className="font-semibold tabular-nums text-white/80">{tomorrowTempLine}</span>
+                <span className="mini text-white/50">{descFor(tomorrow.weatherCode)}</span>
+              </div>
+              <div className="flex flex-wrap gap-3 text-white/65 mini leading-tight">
+                {tomorrow.precipitation > 0 && <span className="flex items-center gap-1 text-blue-300"><Droplets size={13} />{tomorrow.precipitation.toFixed(1)}mm</span>}
+                {tomorrow.windSpeedMax != null && <span className="flex items-center gap-1"><Wind size={13} />max {msToKmh(tomorrow.windSpeedMax).toFixed(0)} km/h</span>}
+                {tomorrow.uvIndexMax != null && <span>UV Max {Math.round(tomorrow.uvIndexMax)}</span>}
+                {tomorrow.sunrise && <span>Sunrise {formatTime(tomorrow.sunrise)}</span>}
+                {tomorrow.sunset && <span>Sunset {formatTime(tomorrow.sunset)}</span>}
+              </div>
+            </div>
           </div>
         </div>
       )}

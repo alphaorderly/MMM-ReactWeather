@@ -3,13 +3,22 @@ import { useState, useEffect, useCallback } from 'react';
 
 export interface WeatherData {
   date: string;
-  temperature: number;
+  temperature: number;             // current (today only) else 0
+  apparentTemperature?: number;    // feels like (current)
   temperatureMax: number;
   temperatureMin: number;
   weatherCode: number;
-  humidity: number;
-  windSpeed: number;
-  precipitation: number;
+  humidity: number;                // current (today only)
+  windSpeed: number;               // current (today only)
+  windSpeedMax?: number;           // daily max wind (for tomorrow / today)
+  precipitation: number;           // daily sum
+  pressure?: number;               // hPa
+  visibility?: number;             // meters
+  uvIndex?: number;                // current UV
+  uvIndexMax?: number;             // daily max UV
+  cloudCover?: number;             // current %
+  sunrise?: string;                // ISO
+  sunset?: string;                 // ISO
 }
 
 export interface UseWeatherResult {
@@ -23,13 +32,13 @@ export interface UseWeatherResult {
 interface UseWeatherParams {
   latitude?: number;
   longitude?: number;
-  updateInterval?: number;
+  interval?: number; // explicit weather refresh interval override (ms)
 }
 
 export const useWeather = ({
-  latitude = 37.5665, // Default to Seoul
+  latitude = 37.5665,
   longitude = 126.9780,
-  updateInterval = 10 * 60 * 1000, // 10 minutes default
+  interval
 }: UseWeatherParams = {}): UseWeatherResult => {
   const [today, setToday] = useState<WeatherData | null>(null);
   const [tomorrow, setTomorrow] = useState<WeatherData | null>(null);
@@ -45,16 +54,25 @@ export const useWeather = ({
         latitude,
         longitude,
         current: [
-          'temperature_2m',
-          'relative_humidity_2m',
-          'weather_code',
-          'wind_speed_10m',
+          'temperature_2m',          // 0
+          'apparent_temperature',    // 1
+          'relative_humidity_2m',    // 2
+            'weather_code',          // 3
+          'wind_speed_10m',          // 4
+          'pressure_msl',            // 5
+          'visibility',              // 6
+          'uv_index',                // 7
+          'cloud_cover'              // 8
         ],
         daily: [
-          'weather_code',
-          'temperature_2m_max',
-          'temperature_2m_min',
-          'precipitation_sum',
+          'weather_code',            // 0
+          'temperature_2m_max',      // 1
+          'temperature_2m_min',      // 2
+          'precipitation_sum',       // 3
+          'wind_speed_10m_max',      // 4
+          'uv_index_max',            // 5
+          'sunrise',                 // 6
+          'sunset'                   // 7
         ],
         timezone: 'auto',
         forecast_days: 2,
@@ -71,33 +89,57 @@ export const useWeather = ({
       
       // Current weather data
       const current = response.current();
-      const currentTemperature = current?.variables(0)?.value() ?? 0;
-      const currentHumidity = current?.variables(1)?.value() ?? 0;
-      const currentWeatherCode = current?.variables(2)?.value() ?? 0;
-      const currentWindSpeed = current?.variables(3)?.value() ?? 0;
+  const currentTemperature = current?.variables(0)?.value() ?? 0;
+  const currentApparent = current?.variables(1)?.value();
+  const currentHumidity = current?.variables(2)?.value() ?? 0;
+  const currentWeatherCode = current?.variables(3)?.value() ?? 0;
+  const currentWindSpeed = current?.variables(4)?.value() ?? 0;
+  const currentPressure = current?.variables(5)?.value();
+  const currentVisibility = current?.variables(6)?.value();
+  const currentUv = current?.variables(7)?.value();
+  const currentCloud = current?.variables(8)?.value();
 
       // Daily weather data
       const daily = response.daily();
       const dailyTime = daily?.time();
-      const dailyWeatherCode = daily?.variables(0)?.valuesArray();
-      const dailyTemperatureMax = daily?.variables(1)?.valuesArray();
-      const dailyTemperatureMin = daily?.variables(2)?.valuesArray();
-      const dailyPrecipitation = daily?.variables(3)?.valuesArray();
+  const dailyWeatherCode = daily?.variables(0)?.valuesArray();
+  const dailyTemperatureMax = daily?.variables(1)?.valuesArray();
+  const dailyTemperatureMin = daily?.variables(2)?.valuesArray();
+  const dailyPrecipitation = daily?.variables(3)?.valuesArray();
+  const dailyWindMax = daily?.variables(4)?.valuesArray();
+  const dailyUvMax = daily?.variables(5)?.valuesArray();
+  const dailySunrise = daily?.variables(6)?.valuesArray();
+  const dailySunset = daily?.variables(7)?.valuesArray();
 
       if (!dailyTime || !dailyWeatherCode || !dailyTemperatureMax || !dailyTemperatureMin || !dailyPrecipitation) {
         throw new Error('Invalid weather data format');
       }
 
       // Process today's data
+      // Convert sunrise/sunset epoch seconds (if provided) -> ISO
+      const sunriseIso = dailySunrise && dailySunrise[0] ? new Date((dailySunrise[0] + utcOffsetSeconds) * 1000).toISOString() : undefined;
+      const sunsetIso = dailySunset && dailySunset[0] ? new Date((dailySunset[0] + utcOffsetSeconds) * 1000).toISOString() : undefined;
+      const sunriseTomorrowIso = dailySunrise && dailySunrise[1] ? new Date((dailySunrise[1] + utcOffsetSeconds) * 1000).toISOString() : undefined;
+      const sunsetTomorrowIso = dailySunset && dailySunset[1] ? new Date((dailySunset[1] + utcOffsetSeconds) * 1000).toISOString() : undefined;
+
       const todayData: WeatherData = {
         date: new Date((Number(dailyTime) + utcOffsetSeconds) * 1000).toISOString().split('T')[0],
         temperature: currentTemperature,
+        apparentTemperature: currentApparent ?? undefined,
         temperatureMax: dailyTemperatureMax[0] ?? 0,
         temperatureMin: dailyTemperatureMin[0] ?? 0,
         weatherCode: Math.round(currentWeatherCode),
         humidity: currentHumidity,
         windSpeed: currentWindSpeed,
+        windSpeedMax: dailyWindMax ? dailyWindMax[0] : undefined,
         precipitation: dailyPrecipitation[0] ?? 0,
+        pressure: currentPressure,
+        visibility: currentVisibility,
+        uvIndex: currentUv,
+        uvIndexMax: dailyUvMax ? dailyUvMax[0] : undefined,
+        cloudCover: currentCloud,
+        sunrise: sunriseIso,
+        sunset: sunsetIso,
       };
 
       // Process tomorrow's data
@@ -107,9 +149,14 @@ export const useWeather = ({
         temperatureMax: dailyTemperatureMax[1] ?? 0,
         temperatureMin: dailyTemperatureMin[1] ?? 0,
         weatherCode: Math.round(dailyWeatherCode[1] ?? 0),
-        humidity: 0, // No current humidity for tomorrow
-        windSpeed: 0, // No current wind speed for tomorrow
+        humidity: 0,
+        windSpeed: 0,
+        windSpeedMax: dailyWindMax ? dailyWindMax[1] : undefined,
         precipitation: dailyPrecipitation[1] ?? 0,
+        uvIndexMax: dailyUvMax ? dailyUvMax[1] : undefined,
+        sunrise: sunriseTomorrowIso,
+        sunset: sunsetTomorrowIso,
+        pressure: undefined,
       };
 
       setToday(todayData);
@@ -129,11 +176,10 @@ export const useWeather = ({
 
   useEffect(() => {
     fetchWeatherData();
-
-    const intervalId = setInterval(fetchWeatherData, updateInterval);
-
+    const effective = interval ?? 10 * 60 * 1000;
+    const intervalId = setInterval(fetchWeatherData, effective);
     return () => clearInterval(intervalId);
-  }, [fetchWeatherData, updateInterval]);
+  }, [fetchWeatherData, interval]);
 
   return {
     today,

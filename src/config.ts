@@ -9,6 +9,7 @@ export interface ModuleConfig {
   lat: number;
   lon: number;
   size?: 'sm' | 'md' | 'lg' | 'xl';
+  interval?: number; // weather data refresh interval (ms)
   [key: string]: unknown;
 }
 
