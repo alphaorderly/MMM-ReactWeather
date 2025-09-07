@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MagicMirror Module Test - ReactSample</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: "Roboto Condensed", sans-serif;
+            background-color: #000;
+            color: #aaa;
+            font-size: 20px;
+            font-weight: 400;
+            line-height: 1.5;
+        }
+        
+        .mmm-reactweather-root {
+            display: block;
+        }
+        
+        .mmm-reactweather-app {
+            text-align: center;
+        }
+        
+        .mmm-reactweather-app h2 {
+            color: #fff;
+            font-size: 24px;
+            margin: 0 0 10px 0;
+        }
+        
+        .mmm-reactweather-app p {
+            margin: 5px 0;
+        }
+        
+        /* MagicMirror 스타일 시뮬레이션 */
+        .magic-mirror-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="magic-mirror-container">
+        <div class="mmm-reactweather-root"></div>
+    </div>
+
+    <script>
+        const testConfig = {
+            dev: true,
+            updateInterval: 30000,
+            lat: 36.54947004213232,
+			lon: 128.73566016504844,
+            size: 'md'
+        };
+
+                document.addEventListener('DOMContentLoaded', function() {
+                        console.log('🪞 MagicMirror Module Test Environment');
+                        console.log('📋 Test Config:', testConfig);
+                        const root = document.querySelector('.mmm-reactweather-root');
+                        if (root) {
+                            root.dataset.config = JSON.stringify(testConfig);
+                        }
+                });
+    </script>
+
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>

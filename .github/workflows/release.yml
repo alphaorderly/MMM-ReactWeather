@@ -1,0 +1,75 @@
+name: Build & Release Module
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'        # e.g. v0.2.0, v1.0.0
+  workflow_dispatch: {}
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed for creating a release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Validate tag matches package.json version
+        run: |
+          PKG_VERSION=$(jq -r .version package.json)
+          TAG_NAME=${GITHUB_REF_NAME}
+          if [ "v${PKG_VERSION}" != "${TAG_NAME}" ]; then
+            echo "Tag (${TAG_NAME}) does not match package.json version (v${PKG_VERSION})." >&2
+            exit 1
+          fi
+
+      - name: Type check
+        run: yarn typecheck
+
+      - name: Lint (non-blocking)
+        run: yarn lint || echo "Lint finished with warnings/errors (not blocking release)."
+
+      - name: Build
+        run: yarn build
+
+      - name: Package release zip
+        run: |
+          MODULE_NAME=$(jq -r .name package.json)
+          MAIN_FILE=$(jq -r .main package.json)
+          VERSION=${GITHUB_REF_NAME}
+          RELEASE_DIR=release/${MODULE_NAME}-${VERSION}
+          mkdir -p ${RELEASE_DIR}
+          cp ${MAIN_FILE} README.md package.json yarn.lock ${RELEASE_DIR}/
+          [ -f LICENSE ] && cp LICENSE ${RELEASE_DIR}/ || true
+          cp -R dist ${RELEASE_DIR}/dist
+          (cd release && zip -r ${MODULE_NAME}-${VERSION}.zip ${MODULE_NAME}-${VERSION})
+          echo "ZIP_NAME=${MODULE_NAME}-${VERSION}.zip" >> $GITHUB_ENV
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-module
+          path: release/*.zip
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
